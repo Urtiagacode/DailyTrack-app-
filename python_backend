@@ -1,0 +1,65 @@
+from importlib import util
+from pathlib import Path
+
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
+ROOT = Path(__file__).resolve().parent
+# Use a clean module name to avoid executing interactive code on import
+PY_FILE = ROOT / "python_data.py"
+
+
+def load_python_module():
+    if not PY_FILE.exists():
+        raise FileNotFoundError(f"Fichier introuvable : {PY_FILE}")
+
+    spec = util.spec_from_file_location("python_data", PY_FILE)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Impossible de charger le module depuis {PY_FILE}")
+
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+app = Flask(__name__)
+CORS(app)
+
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"})
+
+
+@app.route("/data", methods=["GET"])
+def get_data():
+    data_module = load_python_module()
+    return jsonify(data_module.load())
+
+
+@app.route("/finance", methods=["POST"])
+def add_finance():
+    payload = request.get_json(force=True)
+    montant = int(payload.get("montant", 0))
+    raison = str(payload.get("raison", ""))
+    data_module = load_python_module()
+    data = data_module.load()
+    updated = data_module.ajouter(data, montant, raison)
+    data_module.save(updated)
+    return jsonify(updated)
+
+
+@app.route("/sport", methods=["POST"])
+def add_sport():
+    payload = request.get_json(force=True)
+    sport_type = str(payload.get("type", ""))
+    duree = int(payload.get("duree", 0))
+    data_module = load_python_module()
+    data = data_module.load()
+    updated = data_module.ajouter_sport(data, sport_type, duree)
+    data_module.save(updated)
+    return jsonify(updated)
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=True)
